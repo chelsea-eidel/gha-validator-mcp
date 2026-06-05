@@ -114,25 +114,16 @@ examples/
 
 ## Author's notes
 
-I build CI/CD platforms for a living, so the rules here reflect the review
-comments I leave most often: pin your actions to a SHA, scope `GITHUB_TOKEN`
-with an explicit `permissions` block, and keep secrets out of inline `env`.
+A few things I'd point out about the design:
 
-The design choice worth calling out is the split between the engine and the
-MCP layer. `validator.py` and `rules.py` know nothing about MCP. That keeps the
-checks unit-testable in isolation and means the same engine could back a CLI, a
-pre-commit hook, or a GitHub Action with no changes. The MCP server is
-deliberately thin: it parses arguments, calls the engine, and serializes the
-result.
-
-Rules are intentionally small, independent functions registered in a list.
-Adding a check is a function plus one line, and the rule's docstring is what
-`list_rules` and the `gha-validator://rules` resource report, so documentation
-stays next to the code.
-
-One real-world gotcha is baked in: PyYAML parses the bare key `on:` as the
-boolean `True`, not the string `"on"`. The trigger rule checks for both so it
-does not false-positive on valid workflows.
+- **The engine doesn't know about MCP.** `validator.py` and `rules.py` are
+  plain Python, so they're easy to test and could just as well back a CLI or a
+  pre-commit hook. The MCP server is a thin wrapper: parse, validate, return.
+- **Each rule is one small function in a list.** Adding a check means writing a
+  function and adding a line. The docstring doubles as the docs that
+  `list_rules` reports, so they can't drift apart.
+- **One gotcha to know about:** PyYAML reads the bare key `on:` as `True`, not
+  the string `"on"`, so the trigger rule checks for both.
 
 ## Known limitations
 
