@@ -5,7 +5,7 @@ description = "An MCP server that validates GitHub Actions workflows for correct
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Chelsea E" }]
+authors = [{ name = "Chelsea Eidel" }]
 dependencies = [
     "mcp>=1.27.0",
     "pyyaml>=6.0",
@@ -18,6 +18,7 @@ dev = [
 
 [project.scripts]
 gha-validator-mcp = "gha_validator_mcp.server:main"
+gha-validate = "gha_validator_mcp.cli:main"
 
 [build-system]
 requires = ["hatchling"]
