@@ -1,10 +1,12 @@
-# GitHub Actions Validator — MCP Server
+# GitHub Actions Validator
 
-An [MCP](https://modelcontextprotocol.io) server that validates GitHub Actions
-workflow files for correctness and supply-chain safety. Point an MCP client
-(Claude Desktop, the MCP Inspector, or your own agent) at it and ask it to
-check a workflow. It returns a structured report of findings instead of a wall
-of prose.
+Validate GitHub Actions workflows for correctness and supply-chain safety —
+as an [MCP](https://modelcontextprotocol.io) server, a CLI, and a Claude Code
+hook, all over one engine. Point an MCP client (Claude Desktop, the MCP
+Inspector, or your own agent) at it and ask it to check a workflow; run
+`gha-validate` in CI or a pre-commit hook; or let the Claude Code hook stop an
+agent from writing a broken workflow in the first place. Every path returns the
+same structured report of findings instead of a wall of prose.
 
 The validation engine is plain Python and fully testable on its own. Three
 thin consumers sit on top of the same engine:

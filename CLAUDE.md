@@ -27,10 +27,20 @@ src/gha_validator_mcp/
   rules.py       # one small function per check, plus the ALL_RULES registry
   validator.py   # parse YAML -> run rules -> JSON-serializable report
   server.py      # FastMCP wrapper: tools / resource / prompt
+  cli.py         # gha-validate command (file, dir, --github, stdin)
   __init__.py    # __version__
   __main__.py    # enables `python -m gha_validator_mcp`
+hooks/
+  validate_workflow_hook.py   # Claude Code PreToolUse gate (canonical source)
+.claude/
+  settings.json               # wires the hook to the Write|Edit tools
+  hooks/                      # copy Claude Code loads via ${CLAUDE_PROJECT_DIR}
+.github/workflows/
+  ci.yml                      # test suite, Python 3.10-3.12
+  validate-workflows.yml      # runs gha-validate --github on this repo
 tests/
   test_validator.py   # tests the engine directly, no MCP transport
+  test_hook.py        # drives the hook's stdin/stdout contract as a subprocess
 examples/
   sample-workflow.yml
 ```
