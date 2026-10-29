@@ -126,9 +126,12 @@ How it works:
   and validates the *result*.
 - If there are any error-severity findings it returns a `deny` decision whose
   reason lists each finding by rule ID. Warnings and info never block.
-- It fails open: malformed input or an engine it cannot reach exits without a
-  decision, so a broken hook never wedges your session. Pair that with
-  `"onFailure": "block"` in settings if you want the opposite stance.
+- It fails open by design: malformed input, an unmodeled tool shape, or an
+  engine it cannot reach all exit with no decision, so a broken hook never
+  wedges your session. Enforcement never rides on an exit code — a denial is
+  always delivered through the JSON `deny` decision above. (Per the hooks docs,
+  a PreToolUse hook only blocks on exit code 2; exit 1 is a non-blocking error
+  and the write would proceed, so the hook does not use exit codes to block.)
 
 Install it into a repo:
 
@@ -150,8 +153,7 @@ The included `.claude/settings.json` wires it up:
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/validate_workflow_hook.py\"",
-            "timeout": 30,
-            "onFailure": "block"
+            "timeout": 30
           }
         ]
       }
@@ -160,7 +162,8 @@ The included `.claude/settings.json` wires it up:
 }
 ```
 
-The hook calls the `gha-validate` CLI as a subprocess, so the package must be
+The hook runs the engine as a subprocess (`python -m gha_validator_mcp.cli`,
+the same code path as the `gha-validate` command), so the package must be
 importable by the Python that runs the hook (`pip install -e .` in the repo's
 environment is enough).
 
@@ -246,8 +249,10 @@ validate what the file *will* look like the hook reads the current version from
 disk and applies the replacement itself. It also fails open by design: a gate
 that wedges your agent on its own bug is worse than one that occasionally lets a
 bad write through, so uncertainty (unparseable input, an unreachable engine, a
-tool shape it does not model) results in no decision rather than a block. Teams
-that want the stricter stance get it with one line (`"onFailure": "block"`).
+tool shape it does not model) results in no decision rather than a block. The
+enforcement path never depends on an exit code — the hooks contract only blocks
+on exit 2, and exit 1 is a non-blocking error — so a denial is always carried by
+the explicit JSON `deny` decision, and every other outcome falls open.
 
 Rules are intentionally small, independent functions registered in a list.
 Adding a check is a function plus one line, and the rule's docstring is what

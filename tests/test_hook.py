@@ -117,3 +117,32 @@ def _run_hook_raw(raw: str, cwd: Path) -> subprocess.CompletedProcess:
         cwd=str(cwd),
         env=env,
     )
+
+
+def test_unreachable_engine_fails_open(tmp_path):
+    """If the validator subprocess can't run, a bad workflow is ALLOWED, not blocked.
+
+    We force `python -m gha_validator_mcp.cli` to fail by shadowing the package
+    with a sabotaged module earlier on sys.path, so the subprocess exits non-zero.
+    The hook must fall open (exit 0, no decision) rather than crash or emit a deny
+    it can't substantiate. This is the regression guard for the fail-open
+    contract: enforcement never rides on the subprocess succeeding.
+    """
+    shadow = tmp_path / "shadow"
+    (shadow / "gha_validator_mcp").mkdir(parents=True)
+    (shadow / "gha_validator_mcp" / "__init__.py").write_text("")
+    (shadow / "gha_validator_mcp" / "cli.py").write_text(
+        "raise RuntimeError('simulated: engine cannot run')\n"
+    )
+    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{shadow}:{SRC}"}
+    proc = subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=json.dumps({"tool_name": "Write", "tool_input": {
+            "file_path": ".github/workflows/ci.yml", "content": BAD}}),
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+    )
+    assert proc.returncode == 0
+    assert _decision(proc) is None  # allowed: the gate failed open
