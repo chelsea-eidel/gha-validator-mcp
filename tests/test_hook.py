@@ -120,28 +120,35 @@ def _run_hook_raw(raw: str, cwd: Path) -> subprocess.CompletedProcess:
 
 
 def test_unreachable_engine_fails_open(tmp_path):
-    """If the validator subprocess can't run, a bad workflow is ALLOWED, not blocked.
+    """If the validator cannot run at all, a bad workflow is ALLOWED, not blocked.
 
-    We force `python -m gha_validator_mcp.cli` to fail by shadowing the package
-    with a sabotaged module earlier on sys.path, so the subprocess exits non-zero.
-    The hook must fall open (exit 0, no decision) rather than crash or emit a deny
-    it can't substantiate. This is the regression guard for the fail-open
-    contract: enforcement never rides on the subprocess succeeding.
+    The hook prefers a project .venv and falls back to the current interpreter,
+    so to prove fail-open we copy the hook into an isolated dir with NO .venv and
+    run it with an interpreter that can't import the package (a sabotaged src/
+    whose cli module raises on import, and no real package on the path). The
+    subprocess then exits non-zero, and the hook must fall open (exit 0, no
+    decision) rather than crash or emit a deny it can't substantiate. This is the
+    regression guard for the fail-open contract.
     """
-    shadow = tmp_path / "shadow"
-    (shadow / "gha_validator_mcp").mkdir(parents=True)
-    (shadow / "gha_validator_mcp" / "__init__.py").write_text("")
-    (shadow / "gha_validator_mcp" / "cli.py").write_text(
+    # Isolated fake repo: hooks/<hook> with no sibling .venv, and a sabotaged
+    # src/ so the chosen interpreter (sys.executable fallback) can't import cli.
+    fake_repo = tmp_path / "fake_repo"
+    (fake_repo / "hooks").mkdir(parents=True)
+    hook_copy = fake_repo / "hooks" / "validate_workflow_hook.py"
+    hook_copy.write_text(HOOK.read_text())
+    (fake_repo / "src" / "gha_validator_mcp").mkdir(parents=True)
+    (fake_repo / "src" / "gha_validator_mcp" / "__init__.py").write_text("")
+    (fake_repo / "src" / "gha_validator_mcp" / "cli.py").write_text(
         "raise RuntimeError('simulated: engine cannot run')\n"
     )
-    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{shadow}:{SRC}"}
+    env = {"PATH": "/usr/bin:/bin"}  # no PYTHONPATH: only the sabotaged src/ is reachable
     proc = subprocess.run(
-        [sys.executable, str(HOOK)],
+        [sys.executable, str(hook_copy)],
         input=json.dumps({"tool_name": "Write", "tool_input": {
             "file_path": ".github/workflows/ci.yml", "content": BAD}}),
         capture_output=True,
         text=True,
-        cwd=str(tmp_path),
+        cwd=str(fake_repo),
         env=env,
     )
     assert proc.returncode == 0

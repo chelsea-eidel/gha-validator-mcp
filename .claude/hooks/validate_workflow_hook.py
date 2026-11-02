@@ -42,6 +42,27 @@ WORKFLOW_MARKERS = (".github/workflows/",)
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
 
 
+# The repo root is two levels up from this file (hooks/ or .claude/hooks/).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _engine_python() -> str:
+    """Pick the interpreter that has the validator installed.
+
+    Claude Code launches this hook with whatever `python3` is on PATH, which may
+    not be the environment where `pip install -e .` put the package. So rather
+    than trust the launching interpreter, prefer a project virtualenv if one
+    exists next to the repo, and fall back to the current interpreter.
+    """
+    for venv in (".venv", "venv"):
+        candidate = _REPO_ROOT / venv / "bin" / "python"  # POSIX
+        if candidate.is_file():
+            return str(candidate)
+        win = _REPO_ROOT / venv / "Scripts" / "python.exe"  # Windows
+        if win.is_file():
+            return str(win)
+    return sys.executable
+
 def _deny(reason: str) -> None:
     """Emit a PreToolUse deny decision and exit."""
     out = {
@@ -127,15 +148,23 @@ def main() -> None:
         _allow_silently()
 
     # Run the shared engine via its CLI, reading the candidate content on stdin.
+    # Use the project's own interpreter (see _engine_python) and put src/ on the
+    # path, so the hook works whether or not the launching python has the package
+    # installed -- a fresh clone with a .venv is enough.
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(_REPO_ROOT / "src"), env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
     try:
         proc = subprocess.run(
-            [sys.executable, "-m", "gha_validator_mcp.cli", "-"],
+            [_engine_python(), "-m", "gha_validator_mcp.cli", "-"],
             input=content,
             capture_output=True,
             text=True,
             timeout=20,
+            env=env,
         )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         # Fail open: we could not run the validator (not installed, timed out).
         # stderr is surfaced under `claude --debug`, but we exit 0 with no
         # decision so the write is never silently wedged by a broken hook.
